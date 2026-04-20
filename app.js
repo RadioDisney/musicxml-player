@@ -153,11 +153,17 @@
    */
   const collectEvents = (bpm) => {
     const cursor = state.osmd.cursor;
+
+    // Temporarily disable followCursor to prevent scrolling during event collection
+    const wasFollowing = state.osmd.FollowCursor;
+    state.osmd.FollowCursor = false;
+
     cursor.reset();
     cursor.show();
 
     const events = [];
     const beatDuration = 60000 / bpm; // ms per quarter note
+    let cursorStepIndex = 0;
 
     while (!cursor.Iterator.EndReached) {
       const iter = cursor.Iterator;
@@ -169,7 +175,6 @@
       } else if (iter.currentTimeStamp) {
         timeMs = Number(iter.currentTimeStamp.RealValue) * 4 * beatDuration;
       } else {
-        // Fallback: shouldn't happen with standard OSMD
         break;
       }
 
@@ -185,15 +190,16 @@
         pitches.push({ name: midiToNoteName(halfTone), durationStr: realValueToToneDuration(rv) });
       });
 
-      if (pitches.length > 0) {
-        events.push({ timeMs, pitches });
-      }
+      // Record every cursor step (even rests) so cursor stays in sync
+      events.push({ timeMs, pitches, cursorStep: cursorStepIndex });
+      cursorStepIndex++;
 
       cursor.next();
     }
 
     cursor.reset();
     cursor.show();
+    state.osmd.FollowCursor = wasFollowing;
     return events;
   };
 
@@ -231,40 +237,48 @@
     const bpm = Number(bpmRange.value) || 120;
     window.Tone.Transport.bpm.value = bpm;
 
-    const events = collectEvents(bpm);
-    if (events.length === 0) {
+    const allEvents = collectEvents(bpm);
+    if (allEvents.length === 0) {
       setStatus("No playable notes found in score.", "error");
       return;
     }
 
-    // Schedule cursor movement in sync
-    const cursorEvents = events.map((ev) => [ev.timeMs / 1000, ev]);
+    // Reset cursor before playback
+    state.osmd.cursor.reset();
+    state.osmd.cursor.show();
+
+    // Schedule ALL events (including rests) for cursor, but only play notes with pitches
+    const cursorEvents = allEvents.map((ev) => [ev.timeMs / 1000, ev]);
 
     cursorPart = new window.Tone.Part((time, ev) => {
-      // Each pitch carries its own duration
-      ev.pitches.forEach((p) => {
-        polySynth.triggerAttackRelease(p.name, p.durationStr, time);
-      });
+      // Play audio only for events with pitches
+      if (ev.pitches.length > 0) {
+        ev.pitches.forEach((p) => {
+          polySynth.triggerAttackRelease(p.name, p.durationStr, time);
+        });
 
-      // Send MIDI with per-note duration
-      const vel = Math.round(currentVolume() * 127);
-      const names = ev.pitches.map((p) => p.name);
-      sendMidiNoteOn(names, vel);
-      ev.pitches.forEach((p) => {
-        const durMs = window.Tone.Time(p.durationStr).toMilliseconds();
-        setTimeout(() => sendMidiNoteOff([p.name]), durMs);
-      });
+        // Send MIDI
+        const vel = Math.round(currentVolume() * 127);
+        const names = ev.pitches.map((p) => p.name);
+        sendMidiNoteOn(names, vel);
+        ev.pitches.forEach((p) => {
+          const durMs = window.Tone.Time(p.durationStr).toMilliseconds();
+          setTimeout(() => sendMidiNoteOff([p.name]), durMs);
+        });
+      }
 
-      // Advance visual cursor (must run in draw callback for DOM)
-      window.Tone.getDraw().schedule(() => {
+      // Move cursor in sync with actual audio time, not the early callback time.
+      // The callback fires early (by lookAhead), so delay cursor.next() accordingly.
+      const delay = Math.max(0, time - window.Tone.context.currentTime) * 1000;
+      setTimeout(() => {
         try { state.osmd.cursor.next(); } catch (_) {}
-      }, time);
+      }, delay);
     }, cursorEvents);
 
     cursorPart.start(0);
 
     // Stop transport at end
-    const totalSec = (events[events.length - 1].timeMs / 1000) + 1;
+    const totalSec = (allEvents[allEvents.length - 1].timeMs / 1000) + 1;
     window.Tone.Transport.schedule(() => {
       stopToneFallback();
       state.osmd.cursor.reset();

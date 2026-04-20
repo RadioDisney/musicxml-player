@@ -148,9 +148,8 @@
   };
 
   /**
-   * Walk the OSMD cursor from the beginning and collect every event as:
-   *   { timeMs, notes: ["C4", "E4", …], durationStr: "4n" }
-   * This is done synchronously before playback so Tone.js can schedule everything.
+   * Walk the OSMD cursor and collect events using the iterator's own timestamp,
+   * so time stays in sync with cursor movement even with complex multi-voice scores.
    */
   const collectEvents = (bpm) => {
     const cursor = state.osmd.cursor;
@@ -158,12 +157,24 @@
     cursor.show();
 
     const events = [];
-    let timeMs = 0;
+    const beatDuration = 60000 / bpm; // ms per quarter note
 
     while (!cursor.Iterator.EndReached) {
+      const iter = cursor.Iterator;
+
+      // Use iterator's CurrentSourceTimestamp for accurate timing
+      let timeMs;
+      if (iter.CurrentSourceTimestamp) {
+        timeMs = Number(iter.CurrentSourceTimestamp.RealValue) * 4 * beatDuration;
+      } else if (iter.currentTimeStamp) {
+        timeMs = Number(iter.currentTimeStamp.RealValue) * 4 * beatDuration;
+      } else {
+        // Fallback: shouldn't happen with standard OSMD
+        break;
+      }
+
       const notesUnder = cursor.NotesUnderCursor ? cursor.NotesUnderCursor() : [];
       const pitches = [];
-      let shortestRv = Infinity;
 
       (notesUnder || []).forEach((note) => {
         if (!note || (typeof note.isRest === "function" && note.isRest())) return;
@@ -172,18 +183,11 @@
 
         const rv = note.Length ? Number(note.Length.RealValue) : 0.25;
         pitches.push({ name: midiToNoteName(halfTone), durationStr: realValueToToneDuration(rv) });
-        if (rv < shortestRv) shortestRv = rv;
       });
 
       if (pitches.length > 0) {
         events.push({ timeMs, pitches });
       }
-
-      // Advance time by the shortest note duration under cursor,
-      // so longer notes on one staff don't block shorter notes on the other.
-      const beatDuration = 60000 / bpm;           // ms per quarter note
-      const stepRv = Number.isFinite(shortestRv) && shortestRv > 0 ? shortestRv : 0.25;
-      timeMs += stepRv * 4 * beatDuration;
 
       cursor.next();
     }

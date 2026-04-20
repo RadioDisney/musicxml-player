@@ -163,30 +163,27 @@
     while (!cursor.Iterator.EndReached) {
       const notesUnder = cursor.NotesUnderCursor ? cursor.NotesUnderCursor() : [];
       const pitches = [];
-      let longestRv = 0;
-      let durationStr = "4n";
+      let shortestRv = Infinity;
 
       (notesUnder || []).forEach((note) => {
         if (!note || (typeof note.isRest === "function" && note.isRest())) return;
         const halfTone = getNoteHalfTone(note);
         if (halfTone === null || !Number.isFinite(halfTone)) return;
-        pitches.push(midiToNoteName(halfTone));
 
         const rv = note.Length ? Number(note.Length.RealValue) : 0.25;
-        if (rv > longestRv) {
-          longestRv = rv;
-          durationStr = realValueToToneDuration(rv);
-        }
+        pitches.push({ name: midiToNoteName(halfTone), durationStr: realValueToToneDuration(rv) });
+        if (rv < shortestRv) shortestRv = rv;
       });
 
       if (pitches.length > 0) {
-        events.push({ timeMs, pitches, durationStr });
+        events.push({ timeMs, pitches });
       }
 
-      // Advance time by the beat duration (quarter note at given BPM)
+      // Advance time by the shortest note duration under cursor,
+      // so longer notes on one staff don't block shorter notes on the other.
       const beatDuration = 60000 / bpm;           // ms per quarter note
-      const stepRv = longestRv > 0 ? longestRv : 0.25;
-      timeMs += stepRv * 4 * beatDuration;        // whole-note duration × fraction
+      const stepRv = Number.isFinite(shortestRv) && shortestRv > 0 ? shortestRv : 0.25;
+      timeMs += stepRv * 4 * beatDuration;
 
       cursor.next();
     }
@@ -240,14 +237,19 @@
     const cursorEvents = events.map((ev) => [ev.timeMs / 1000, ev]);
 
     cursorPart = new window.Tone.Part((time, ev) => {
-      // Schedule audio
-      polySynth.triggerAttackRelease(ev.pitches, ev.durationStr, time);
+      // Each pitch carries its own duration
+      ev.pitches.forEach((p) => {
+        polySynth.triggerAttackRelease(p.name, p.durationStr, time);
+      });
 
-      // Send MIDI
+      // Send MIDI with per-note duration
       const vel = Math.round(currentVolume() * 127);
-      sendMidiNoteOn(ev.pitches, vel);
-      const durMs = window.Tone.Time(ev.durationStr).toMilliseconds();
-      setTimeout(() => sendMidiNoteOff(ev.pitches), durMs);
+      const names = ev.pitches.map((p) => p.name);
+      sendMidiNoteOn(names, vel);
+      ev.pitches.forEach((p) => {
+        const durMs = window.Tone.Time(p.durationStr).toMilliseconds();
+        setTimeout(() => sendMidiNoteOff([p.name]), durMs);
+      });
 
       // Advance visual cursor (must run in draw callback for DOM)
       window.Tone.getDraw().schedule(() => {

@@ -88,13 +88,18 @@
     if (state.midiOutput) state.midiOutput.send([0xb0, 123, 0]);
   };
 
+  let midiInitialized = false;
+
   const initMidi = async () => {
-    if (!navigator.requestMIDIAccess) return;
+    if (midiInitialized || !navigator.requestMIDIAccess) return;
+    midiInitialized = true;
     try {
       const access = await navigator.requestMIDIAccess();
       const outputs = Array.from(access.outputs.values());
       const sel = document.getElementById("midiOutput");
       if (!sel || outputs.length === 0) return;
+      // 清除已有选项（保留第一个 "-- No MIDI --"）
+      while (sel.options.length > 1) sel.remove(1);
       outputs.forEach((out, i) => {
         const opt = document.createElement("option");
         opt.value = i;
@@ -359,7 +364,9 @@
 
     setStatus("Load a file, URL, or sample to start.");
 
-    initMidi();
+    // 用户点击 MIDI 下拉框时才请求权限（远程 HTTPS 站点需要用户手势）
+    const midiSel = document.getElementById("midiOutput");
+    if (midiSel) midiSel.addEventListener("focus", () => initMidi(), { once: true });
 
     fileInput.addEventListener("change", (e) => { const [f] = e.target.files || []; loadFromFile(f); });
     loadUrlBtn.addEventListener("click", loadFromUrl);

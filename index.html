@@ -37,6 +37,12 @@
         <button id="stopBtn" type="button" disabled>Stop</button>
       </div>
       <div class="group slider-group">
+        <label for="midiOutput">MIDI Out</label>
+        <select id="midiOutput">
+          <option value="">-- No MIDI --</option>
+        </select>
+      </div>
+      <div class="group slider-group">
         <label for="bpmRange">BPM</label>
         <input id="bpmRange" type="range" min="40" max="220" value="100" />
         <span id="bpmValue">100</span>

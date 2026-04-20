@@ -6,6 +6,7 @@
     toneScheduled: false,
     zoom: 1,
     currentSourceLabel: "",
+    midiOutput: null,
   };
 
   const statusEl = document.getElementById("status");
@@ -55,6 +56,55 @@
         setStatus(`Failed to apply settings: ${e?.message || "unknown"}`, "error");
       }
     }
+  };
+
+  // ─── Web MIDI ─────────────────────────────────────────────────────────────────
+
+  const noteNameToMidi = (name) => {
+    const m = name.match(/^([A-G]#?)(-?\d+)$/);
+    if (!m) return null;
+    const map = { C:0,"C#":1,D:2,"D#":3,E:4,F:5,"F#":6,G:7,"G#":8,A:9,"A#":10,B:11 };
+    const s = map[m[1]];
+    return s !== undefined ? (Number(m[2]) + 1) * 12 + s : null;
+  };
+
+  const sendMidiNoteOn = (pitches, velocity) => {
+    if (!state.midiOutput) return;
+    pitches.forEach((name) => {
+      const n = noteNameToMidi(name);
+      if (n !== null && n >= 0 && n <= 127) state.midiOutput.send([0x90, n, velocity]);
+    });
+  };
+
+  const sendMidiNoteOff = (pitches) => {
+    if (!state.midiOutput) return;
+    pitches.forEach((name) => {
+      const n = noteNameToMidi(name);
+      if (n !== null && n >= 0 && n <= 127) state.midiOutput.send([0x80, n, 0]);
+    });
+  };
+
+  const sendMidiAllNotesOff = () => {
+    if (state.midiOutput) state.midiOutput.send([0xb0, 123, 0]);
+  };
+
+  const initMidi = async () => {
+    if (!navigator.requestMIDIAccess) return;
+    try {
+      const access = await navigator.requestMIDIAccess();
+      const outputs = Array.from(access.outputs.values());
+      const sel = document.getElementById("midiOutput");
+      if (!sel || outputs.length === 0) return;
+      outputs.forEach((out, i) => {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = out.name || `Output ${i}`;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener("change", () => {
+        state.midiOutput = sel.value !== "" ? outputs[Number(sel.value)] : null;
+      });
+    } catch (_) {}
   };
 
   // ─── Tone.js fallback ────────────────────────────────────────────────────────
@@ -152,6 +202,7 @@
       window.Tone.Transport.cancel();
     }
     state.toneScheduled = false;
+    sendMidiAllNotesOff();
   };
 
   const startToneFallback = async () => {
@@ -186,6 +237,12 @@
     cursorPart = new window.Tone.Part((time, ev) => {
       // Schedule audio
       polySynth.triggerAttackRelease(ev.pitches, ev.durationStr, time);
+
+      // Send MIDI
+      const vel = Math.round(currentVolume() * 127);
+      sendMidiNoteOn(ev.pitches, vel);
+      const durMs = window.Tone.Time(ev.durationStr).toMilliseconds();
+      setTimeout(() => sendMidiNoteOff(ev.pitches), durMs);
 
       // Advance visual cursor (must run in draw callback for DOM)
       window.Tone.getDraw().schedule(() => {
@@ -301,6 +358,8 @@
     });
 
     setStatus("Load a file, URL, or sample to start.");
+
+    initMidi();
 
     fileInput.addEventListener("change", (e) => { const [f] = e.target.files || []; loadFromFile(f); });
     loadUrlBtn.addEventListener("click", loadFromUrl);

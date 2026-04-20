@@ -81,6 +81,8 @@
   };
 
   const startFallback = async () => {
+    const fallbackDuration = "16n";
+
     if (!window.Tone) {
       setStatus("Tone.js fallback is unavailable. Please check CDN access.", "error");
       return;
@@ -95,6 +97,32 @@
       }).toDestination();
     }
 
+    const midiToNoteName = (midi) => {
+      const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+      const octave = Math.floor(midi / 12) - 1;
+      const name = noteNames[midi % 12];
+      return `${name}${octave}`;
+    };
+
+    const toToneDuration = (length) => {
+      const realValue = Number(length?.RealValue);
+      const knownDurations = [
+        [1, "1n"],
+        [0.5, "2n"],
+        [0.25, "4n"],
+        [0.125, "8n"],
+        [0.0625, "16n"],
+      ];
+
+      if (!Number.isFinite(realValue)) {
+        return fallbackDuration;
+      }
+
+      return knownDurations.reduce((best, current) =>
+        Math.abs(current[0] - realValue) < Math.abs(best[0] - realValue) ? current : best,
+      )[1];
+    };
+
     state.fallbackSynth.volume.value = -24 + currentVolume() * 24;
 
     stopFallback();
@@ -108,10 +136,40 @@
         return;
       }
 
-      state.fallbackSynth.triggerAttackRelease("C5", "16n");
+      if (state.osmd.cursor.Iterator?.EndReached) {
+        stopFallback();
+        return;
+      }
+
+      const notes = state.osmd.cursor.NotesUnderCursor();
+      const playableNotes = [];
+      let duration = fallbackDuration;
+      let longestDuration = 0;
+      notes.forEach((note) => {
+        if (!note || note.isRest()) {
+          return;
+        }
+        const midi = Number(note.halfTone);
+        if (!Number.isFinite(midi)) {
+          return;
+        }
+        playableNotes.push(midiToNoteName(midi));
+        const noteDuration = Number(note.Length?.RealValue);
+        if (Number.isFinite(noteDuration) && noteDuration >= longestDuration) {
+          longestDuration = noteDuration;
+          duration = toToneDuration(note.Length);
+        }
+      });
+
+      if (playableNotes.length > 0) {
+        state.fallbackSynth.triggerAttackRelease(playableNotes, duration);
+      }
 
       try {
         state.osmd.cursor.next();
+        if (state.osmd.cursor.Iterator?.EndReached) {
+          stopFallback();
+        }
       } catch (_error) {
         stopFallback();
       }

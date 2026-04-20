@@ -203,11 +203,17 @@
     return events;
   };
 
+  let cursorTimer = null;
+
   const stopToneFallback = () => {
     if (cursorPart) {
       cursorPart.stop();
       cursorPart.dispose();
       cursorPart = null;
+    }
+    if (cursorTimer) {
+      clearInterval(cursorTimer);
+      cursorTimer = null;
     }
     if (window.Tone) {
       window.Tone.Transport.stop();
@@ -247,38 +253,56 @@
     state.osmd.cursor.reset();
     state.osmd.cursor.show();
 
-    // Schedule ALL events (including rests) for cursor, but only play notes with pitches
-    const cursorEvents = allEvents.map((ev) => [ev.timeMs / 1000, ev]);
+    // Build audio-only events (merged by time, for scheduling sound)
+    const audioEvents = [];
+    for (const ev of allEvents) {
+      if (ev.pitches.length === 0) continue;
+      const last = audioEvents[audioEvents.length - 1];
+      if (last && Math.abs(last.timeMs - ev.timeMs) < 1) {
+        last.pitches.push(...ev.pitches);
+      } else {
+        audioEvents.push({ timeMs: ev.timeMs, pitches: [...ev.pitches] });
+      }
+    }
+
+    // Schedule audio via Tone.Part
+    const partEvents = audioEvents.map((ev) => [ev.timeMs / 1000, ev]);
 
     cursorPart = new window.Tone.Part((time, ev) => {
-      // Play audio only for events with pitches
-      if (ev.pitches.length > 0) {
-        ev.pitches.forEach((p) => {
-          polySynth.triggerAttackRelease(p.name, p.durationStr, time);
-        });
+      ev.pitches.forEach((p) => {
+        polySynth.triggerAttackRelease(p.name, p.durationStr, time);
+      });
 
-        // Send MIDI
-        const vel = Math.round(currentVolume() * 127);
-        const names = ev.pitches.map((p) => p.name);
-        sendMidiNoteOn(names, vel);
-        ev.pitches.forEach((p) => {
-          const durMs = window.Tone.Time(p.durationStr).toMilliseconds();
-          setTimeout(() => sendMidiNoteOff([p.name]), durMs);
-        });
-      }
-
-      // Move cursor in sync with actual audio time, not the early callback time.
-      // The callback fires early (by lookAhead), so delay cursor.next() accordingly.
-      const delay = Math.max(0, time - window.Tone.context.currentTime) * 1000;
-      setTimeout(() => {
-        try { state.osmd.cursor.next(); } catch (_) {}
-      }, delay);
-    }, cursorEvents);
+      // Send MIDI
+      const vel = Math.round(currentVolume() * 127);
+      const names = ev.pitches.map((p) => p.name);
+      sendMidiNoteOn(names, vel);
+      ev.pitches.forEach((p) => {
+        const durMs = window.Tone.Time(p.durationStr).toMilliseconds();
+        setTimeout(() => sendMidiNoteOff([p.name]), durMs);
+      });
+    }, partEvents);
 
     cursorPart.start(0);
 
+    // Drive cursor independently using a polling timer synced to transport time
+    const beatDuration = 60000 / bpm;
+    let cursorEventIndex = 0;
+
+    cursorTimer = setInterval(() => {
+      if (!state.toneScheduled) return;
+      const transportMs = window.Tone.Transport.seconds * 1000;
+
+      // Advance cursor to match current transport position
+      while (cursorEventIndex < allEvents.length &&
+             allEvents[cursorEventIndex].timeMs <= transportMs) {
+        try { state.osmd.cursor.next(); } catch (_) {}
+        cursorEventIndex++;
+      }
+    }, 50); // Poll every 50ms
+
     // Stop transport at end
-    const totalSec = (allEvents[allEvents.length - 1].timeMs / 1000) + 1;
+    const totalSec = (allEvents[allEvents.length - 1].timeMs / 1000) + 2;
     window.Tone.Transport.schedule(() => {
       stopToneFallback();
       state.osmd.cursor.reset();
@@ -287,6 +311,7 @@
     }, totalSec);
 
     window.Tone.Transport.start();
+    state.toneScheduled = true;
     state.toneScheduled = true;
   };
 

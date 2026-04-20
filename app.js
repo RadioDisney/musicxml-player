@@ -188,8 +188,9 @@
       await loadScore(payload, `URL: ${url}`);
     } catch (error) {
       setLoading(false);
+      const detail = error?.message ? ` (${error.message})` : "";
       setStatus(
-        "Could not fetch URL. Check the link and CORS policy, or download and upload the file locally.",
+        `Could not fetch URL. Check the link and CORS policy, or download and upload the file locally.${detail}`,
         "error",
       );
     }

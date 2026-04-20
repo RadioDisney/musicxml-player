@@ -81,6 +81,8 @@
   };
 
   const startFallback = async () => {
+    const fallbackDuration = "16n";
+
     if (!window.Tone) {
       setStatus("Tone.js fallback is unavailable. Please check CDN access.", "error");
       return;
@@ -113,7 +115,7 @@
       ];
 
       if (!Number.isFinite(realValue)) {
-        return "16n";
+        return fallbackDuration;
       }
 
       return knownDurations.reduce((best, current) =>
@@ -141,7 +143,8 @@
 
       const notes = state.osmd.cursor.NotesUnderCursor();
       const playableNotes = [];
-      let duration = "16n";
+      let duration = fallbackDuration;
+      let longestDuration = 0;
       notes.forEach((note) => {
         if (!note || note.isRest()) {
           return;
@@ -151,7 +154,11 @@
           return;
         }
         playableNotes.push(midiToNoteName(midi));
-        duration = toToneDuration(note.Length);
+        const noteDuration = Number(note.Length?.RealValue);
+        if (Number.isFinite(noteDuration) && noteDuration >= longestDuration) {
+          longestDuration = noteDuration;
+          duration = toToneDuration(note.Length);
+        }
       });
 
       if (playableNotes.length > 0) {

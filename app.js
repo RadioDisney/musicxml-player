@@ -37,8 +37,8 @@
   };
 
   const setLoading = (loading, message = "") => {
-    const controls = [fileInput, loadUrlBtn, loadSampleBtn, playBtn, pauseBtn, stopBtn];
-    controls.forEach((el) => {
+    const loadingControls = [fileInput, loadUrlBtn, loadSampleBtn, playBtn, pauseBtn, stopBtn];
+    loadingControls.forEach((el) => {
       el.disabled = loading || (!state.scoreLoaded && (el === playBtn || el === pauseBtn || el === stopBtn));
     });
     if (loading) {
@@ -75,14 +75,14 @@
           state.player.playbackSettings.masterVolume = currentVolume();
         }
       } catch (error) {
-        setStatus("Updated controls, but player settings could not be fully applied.", "error");
+        setStatus(`Failed to apply playback settings: ${error?.message || "unknown error"}.`, "error");
       }
     }
   };
 
   const startFallback = async () => {
     if (!window.Tone) {
-      setStatus("Audio player unavailable. Please check CDN access.", "error");
+      setStatus("Tone.js fallback is unavailable. Please check CDN access.", "error");
       return;
     }
 
@@ -158,7 +158,11 @@
       setLoading(false);
 
       let message = "Failed to load score. Please verify the file format or URL.";
-      if (String(error && error.message).toLowerCase().includes("cors")) {
+      const errorText = String(error?.message || "").toLowerCase();
+      if (
+        label.startsWith("URL:") &&
+        (errorText.includes("cors") || errorText.includes("failed to fetch") || error?.name === "TypeError")
+      ) {
         message = "Failed to load URL due to CORS restrictions. Please allow cross-origin access or use local upload.";
       }
       setStatus(message, "error");
@@ -240,7 +244,7 @@
         await loadScore(text, "sample.xml");
       } catch (_error) {
         setLoading(false);
-        setStatus("Sample failed to load. Please run with a local server instead of file://.", "error");
+        setStatus("Sample failed to load. Please use a web server instead of opening the file directly.", "error");
       }
     });
 

@@ -30,6 +30,7 @@ Open `index.html` in a browser.
 - Serve locally with any static server (for example: `python3 -m http.server`)
 
 Then open the served URL and use the toolbar to load a file, URL, or the sample score.
+With the example command above, open `http://localhost:8000`.
 
 ## Screenshot
 
@@ -43,7 +44,5 @@ Add screenshot here after deployment, for example:
   - `https://cdn.jsdelivr.net/npm/opensheetmusicdisplay/build/opensheetmusicdisplay.min.js`
 - osmd-audio-player:
   - `https://cdn.jsdelivr.net/npm/osmd-audio-player/build/osmd-audio-player.min.js`
-  - fallback UMD path used in page for compatibility:
-    - `https://cdn.jsdelivr.net/npm/osmd-audio-player/umd/OsmdAudioPlayer.min.js`
 - Tone.js fallback (when audio player CDN is unavailable):
   - `https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js`

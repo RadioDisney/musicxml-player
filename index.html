@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MusicXML Player</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay/build/opensheetmusicdisplay.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/osmd-audio-player/build/osmd-audio-player.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/osmd-audio-player/umd/OsmdAudioPlayer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>MusicXML Player</h1>
+      <div class="toolbar">
+        <label class="file-btn" for="fileInput">Upload MusicXML</label>
+        <input id="fileInput" type="file" accept=".xml,.mxl" />
+        <input id="urlInput" type="url" placeholder="https://example.com/score.xml" />
+        <button id="loadUrlBtn" type="button">Load URL</button>
+        <button id="loadSampleBtn" type="button">Load Sample</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+      <div id="osmd-container" class="sheet-container"></div>
+    </main>
+
+    <section class="controls">
+      <div class="group">
+        <button id="zoomOutBtn" type="button">Zoom -</button>
+        <button id="zoomInBtn" type="button">Zoom +</button>
+      </div>
+      <div class="group">
+        <button id="playBtn" type="button" disabled>Play</button>
+        <button id="pauseBtn" type="button" disabled>Pause</button>
+        <button id="stopBtn" type="button" disabled>Stop</button>
+      </div>
+      <div class="group slider-group">
+        <label for="bpmRange">BPM</label>
+        <input id="bpmRange" type="range" min="40" max="220" value="100" />
+        <span id="bpmValue">100</span>
+      </div>
+      <div class="group slider-group">
+        <label for="volumeRange">Volume</label>
+        <input id="volumeRange" type="range" min="0" max="100" value="80" />
+        <span id="volumeValue">80%</span>
+      </div>
+    </section>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

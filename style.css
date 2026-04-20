@@ -1,0 +1,148 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f6f9;
+  --text: #1a2433;
+  --nav: #101827;
+  --nav-text: #f8fafc;
+  --surface: #ffffff;
+  --border: #d9e0ea;
+  --primary: #2563eb;
+  --danger: #b91c1c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--nav);
+  color: var(--nav-text);
+  padding: 12px 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.topbar h1 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.file-btn,
+button,
+input[type="url"] {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  padding: 8px 12px;
+}
+
+button,
+.file-btn {
+  cursor: pointer;
+  background: var(--primary);
+  color: #fff;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.file-btn {
+  display: inline-flex;
+  align-items: center;
+}
+
+#fileInput {
+  display: none;
+}
+
+input[type="url"] {
+  width: min(380px, 100%);
+  border-color: #3b82f6;
+}
+
+.content {
+  width: min(1200px, 95vw);
+  margin: 16px auto 96px;
+}
+
+.status {
+  min-height: 24px;
+  margin-bottom: 12px;
+  color: #334155;
+}
+
+.status.error {
+  color: var(--danger);
+}
+
+.status.loading {
+  color: #1d4ed8;
+}
+
+.sheet-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  min-height: 320px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.controls {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.98);
+  border-top: 1px solid var(--border);
+  padding: 10px 16px;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-group {
+  min-width: 220px;
+}
+
+.slider-group input {
+  width: 120px;
+}
+
+@media (max-width: 768px) {
+  .content {
+    margin-bottom: 140px;
+  }
+
+  .slider-group {
+    min-width: 170px;
+  }
+}

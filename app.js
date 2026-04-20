@@ -293,9 +293,10 @@
       if (!state.toneScheduled) return;
       const transportMs = window.Tone.Transport.seconds * 1000;
 
-      // Advance cursor to match current transport position
-      while (cursorEventIndex < allEvents.length &&
-             allEvents[cursorEventIndex].timeMs <= transportMs) {
+      // Advance cursor only when the NEXT event's time is reached,
+      // so the cursor stays on the current note while it's sounding.
+      while (cursorEventIndex < allEvents.length - 1 &&
+             allEvents[cursorEventIndex + 1].timeMs <= transportMs) {
         try { state.osmd.cursor.next(); } catch (_) {}
         cursorEventIndex++;
       }

@@ -268,19 +268,31 @@
     // Schedule audio via Tone.Part
     const partEvents = audioEvents.map((ev) => [ev.timeMs / 1000, ev]);
 
+    let prevNoteNames = [];
+    const firedTimes = new Set();
     cursorPart = new window.Tone.Part((time, ev) => {
+      // Deduplicate: Tone.js lookahead can fire same event twice
+      const key = ev.timeMs;
+      if (firedTimes.has(key)) return;
+      firedTimes.add(key);
+
+      console.log(`Event at ${ev.timeMs}ms:`, ev.pitches.map((p) => p.name).join(", "));
+
+      // 先关上一个事件的所有音符
+      if (prevNoteNames.length > 0) {
+        sendMidiNoteOff(prevNoteNames);
+      }
+
+      // 播放当前音符
       ev.pitches.forEach((p) => {
         polySynth.triggerAttackRelease(p.name, p.durationStr, time);
       });
 
-      // Send MIDI
+      // 发送当前 Note On
       const vel = Math.round(currentVolume() * 127);
       const names = ev.pitches.map((p) => p.name);
       sendMidiNoteOn(names, vel);
-      ev.pitches.forEach((p) => {
-        const durMs = window.Tone.Time(p.durationStr).toMilliseconds();
-        setTimeout(() => sendMidiNoteOff([p.name]), durMs);
-      });
+      prevNoteNames = names;
     }, partEvents);
 
     cursorPart.start(0);
@@ -312,7 +324,6 @@
     }, totalSec);
 
     window.Tone.Transport.start();
-    state.toneScheduled = true;
     state.toneScheduled = true;
   };
 

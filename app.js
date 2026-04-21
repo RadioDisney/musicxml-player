@@ -306,10 +306,12 @@
         sendMidiNoteOff(prevNoteNames);
       }
 
-      // 播放当前音符（合成器）
-      ev.pitches.forEach((p) => {
-        polySynth.triggerAttackRelease(p.name, p.durationStr, time);
-      });
+      // 播放当前音符（合成器）— 练习模式下静音
+      if (!state.practiceMode) {
+        ev.pitches.forEach((p) => {
+          polySynth.triggerAttackRelease(p.name, p.durationStr, time);
+        });
+      }
 
       // 发送当前 Note On
       const vel = Math.round(currentVolume() * 127);

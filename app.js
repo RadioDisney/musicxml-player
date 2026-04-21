@@ -7,6 +7,7 @@
     zoom: 1,
     currentSourceLabel: "",
     midiOutput: null,
+    practiceMode: false,
   };
 
   const statusEl = document.getElementById("status");
@@ -90,24 +91,47 @@
 
   let midiInitialized = false;
 
+  // Practice mode: set of MIDI note numbers still waiting to be played
+  let practiceWaitingNotes = null; // null = not waiting
+
   const initMidi = async () => {
     if (midiInitialized || !navigator.requestMIDIAccess) return;
     midiInitialized = true;
     try {
       const access = await navigator.requestMIDIAccess();
       const outputs = Array.from(access.outputs.values());
+      const inputs = Array.from(access.inputs.values());
       const sel = document.getElementById("midiOutput");
-      if (!sel || outputs.length === 0) return;
-      // 清除已有选项（保留第一个 "-- No MIDI --"）
-      while (sel.options.length > 1) sel.remove(1);
-      outputs.forEach((out, i) => {
-        const opt = document.createElement("option");
-        opt.value = i;
-        opt.textContent = out.name || `Output ${i}`;
-        sel.appendChild(opt);
-      });
-      sel.addEventListener("change", () => {
-        state.midiOutput = sel.value !== "" ? outputs[Number(sel.value)] : null;
+      if (sel && outputs.length > 0) {
+        // 清除已有选项（保留第一个 "-- No MIDI --"）
+        while (sel.options.length > 1) sel.remove(1);
+        outputs.forEach((out, i) => {
+          const opt = document.createElement("option");
+          opt.value = i;
+          opt.textContent = out.name || `Output ${i}`;
+          sel.appendChild(opt);
+        });
+        sel.addEventListener("change", () => {
+          state.midiOutput = sel.value !== "" ? outputs[Number(sel.value)] : null;
+        });
+      }
+
+      // Listen on all MIDI inputs for practice mode
+      inputs.forEach((input) => {
+        input.onmidimessage = (msg) => {
+          const [status, note] = msg.data;
+          const isNoteOn = (status & 0xf0) === 0x90 && msg.data[2] > 0;
+          if (!isNoteOn || !state.practiceMode || !practiceWaitingNotes) return;
+
+          practiceWaitingNotes.delete(note);
+          if (practiceWaitingNotes.size === 0) {
+            // All required notes played — resume transport
+            practiceWaitingNotes = null;
+            if (window.Tone && state.toneScheduled) {
+              window.Tone.Transport.start();
+            }
+          }
+        };
       });
     } catch (_) {}
   };
@@ -220,6 +244,7 @@
       window.Tone.Transport.cancel();
     }
     state.toneScheduled = false;
+    practiceWaitingNotes = null;
     sendMidiAllNotesOff();
   };
 
@@ -276,14 +301,12 @@
       if (firedTimes.has(key)) return;
       firedTimes.add(key);
 
-      console.log(`Event at ${ev.timeMs}ms:`, ev.pitches.map((p) => p.name).join(", "));
-
       // 先关上一个事件的所有音符
       if (prevNoteNames.length > 0) {
         sendMidiNoteOff(prevNoteNames);
       }
 
-      // 播放当前音符
+      // 播放当前音符（合成器）
       ev.pitches.forEach((p) => {
         polySynth.triggerAttackRelease(p.name, p.durationStr, time);
       });
@@ -293,6 +316,17 @@
       const names = ev.pitches.map((p) => p.name);
       sendMidiNoteOn(names, vel);
       prevNoteNames = names;
+
+      // 练习模式：发完 Note On 后暂停，等用户弹对所有音符
+      if (state.practiceMode && names.length > 0) {
+        const waitMs = Math.max(0, time - window.Tone.context.currentTime) * 1000;
+        setTimeout(() => {
+          if (!state.toneScheduled) return;
+          practiceWaitingNotes = new Set(names.map((n) => noteNameToMidi(n)).filter((n) => n !== null));
+          window.Tone.Transport.pause();
+          setStatus(`Practice: play ${names.join(", ")}`);
+        }, waitMs);
+      }
     }, partEvents);
 
     cursorPart.start(0);
@@ -424,6 +458,15 @@
     // 用户点击 MIDI 下拉框时才请求权限（远程 HTTPS 站点需要用户手势）
     const midiSel = document.getElementById("midiOutput");
     if (midiSel) midiSel.addEventListener("focus", () => initMidi(), { once: true });
+
+    const practiceToggle = document.getElementById("practiceToggle");
+    if (practiceToggle) {
+      practiceToggle.addEventListener("change", () => {
+        state.practiceMode = practiceToggle.checked;
+        // Practice mode needs MIDI input — init if not yet done
+        if (state.practiceMode) initMidi();
+      });
+    }
 
     fileInput.addEventListener("change", (e) => { const [f] = e.target.files || []; loadFromFile(f); });
     loadUrlBtn.addEventListener("click", loadFromUrl);

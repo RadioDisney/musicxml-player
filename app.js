@@ -112,7 +112,15 @@
           sel.appendChild(opt);
         });
         sel.addEventListener("change", () => {
-          state.midiOutput = sel.value !== "" ? outputs[Number(sel.value)] : null;
+          const out = sel.value !== "" ? outputs[Number(sel.value)] : null;
+          state.midiOutput = out;
+          if (out && out.name && out.name.includes("PartyKeys")) {
+            setTimeout(() => {
+              try {
+                out.send([0xF0, 0x7F, 0x30, 0x7F, 0x7F, 0x20, 0x00, 0x0F, 0x01, 0xF7]);
+              } catch (_) {}
+            }, 500);
+          }
         });
       }
 

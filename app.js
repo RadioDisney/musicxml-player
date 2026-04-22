@@ -98,7 +98,7 @@
     if (midiInitialized || !navigator.requestMIDIAccess) return;
     midiInitialized = true;
     try {
-      const access = await navigator.requestMIDIAccess();
+      const access = await navigator.requestMIDIAccess({ sysex: true });
       const outputs = Array.from(access.outputs.values());
       const inputs = Array.from(access.inputs.values());
       const sel = document.getElementById("midiOutput");

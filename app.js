@@ -330,7 +330,7 @@
 
       // 先关上一个事件的所有音符
       if (prevNoteNames.length > 0) {
-        sendMidiNoteOff(prevNoteNames);
+        // sendMidiNoteOff(prevNoteNames);
       }
 
       // 播放当前音符（合成器）— 练习模式下静音
@@ -343,7 +343,7 @@
       // 发送当前 Note On
       const vel = Math.round(currentVolume() * 127);
       const names = ev.pitches.map((p) => p.name);
-      sendMidiNoteOn(names, vel);
+      // sendMidiNoteOn(names, vel);
       sendLampOn(names);
       prevNoteNames = names;
 

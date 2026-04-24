@@ -84,7 +84,7 @@
     pitches.forEach((name) => {
       const n = noteNameToMidi(name);
       lampId = n - 48;
-      colorId = n % 12;
+      colorId = n % 12 + 1;
       if (lampId >= 0 && lampId <= 36 && colorId >= 0 && colorId <= 11) 
       {
         midiMsg.push(lampId);
@@ -551,6 +551,7 @@
       try {
         if (state.player && typeof state.player.stop === "function") await state.player.stop();
         stopToneFallback();
+        sendLampOn([]); // Clear any lingering lamps
         state.osmd.cursor.reset();
         state.osmd.cursor.show();
         setStatus("Stopped.");

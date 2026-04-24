@@ -77,23 +77,35 @@
     });
   };
 
-  const sendLampOn = (pitches) => {
+  const sendLampSysEx = (entries) => {
+    // entries: array of { lampId, colorId }
+    // lampId: 0-36 (piano key offset from MIDI 48), colorId: 0=off, 1-11=color
     if (!state.midiOutput) return;
-    midiMsg = [0xF0, 0x05, 0x30, 0x00, 0x3F, 0x20, 0x00, 0x14];
-    midiMsg.push(pitches.length); // Lamp count placeholder
-    pitches.forEach((name) => {
-      const n = noteNameToMidi(name);
-      lampId = n - 48;
-      colorId = n % 12 + 1;
-      if (lampId >= 0 && lampId <= 36 && colorId >= 0 && colorId <= 11) 
-      {
-        midiMsg.push(lampId);
-        midiMsg.push(colorId);
-      }
-    });
-    midiMsg.push(0xF7); // End of SysEx message
+    const valid = entries.filter(e => e.lampId >= 0 && e.lampId <= 36 && e.colorId >= 0 && e.colorId <= 11);
+    if (valid.length === 0) return;
+    const midiMsg = [0xF0, 0x05, 0x30, 0x00, 0x3F, 0x20, 0x00, 0x14, valid.length];
+    valid.forEach(e => { midiMsg.push(e.lampId); midiMsg.push(e.colorId); });
+    midiMsg.push(0xF7);
     state.midiOutput.send(midiMsg);
-    console.log("Sent MIDI Lamp On : ", midiMsg.map(x => x.toString(16).toUpperCase().padStart(2, '0')));
+    console.log("Sent MIDI Lamp SysEx : ", midiMsg.map(x => x.toString(16).toUpperCase().padStart(2, '0')));
+  };
+
+  const sendLampOn = (pitches) => {
+    const entries = pitches.map(name => {
+      const n = noteNameToMidi(name);
+      if (n === null) return null;
+      return { lampId: n - 48, colorId: (n % 12) + 1 };
+    }).filter(Boolean);
+    sendLampSysEx(entries);
+  };
+
+  const sendLampOff = (pitches) => {
+    const entries = pitches.map(name => {
+      const n = noteNameToMidi(name);
+      if (n === null) return null;
+      return { lampId: n - 48, colorId: 0 }; // colorId=0 熄灯
+    }).filter(Boolean);
+    sendLampSysEx(entries);
   };
 
   const sendMidiNoteOff = (pitches) => {
@@ -340,12 +352,19 @@
         });
       }
 
-      // 发送当前 Note On
+      // 发送当前 Note On，并按各音符时值调度熄灯
       const vel = Math.round(currentVolume() * 127);
       const names = ev.pitches.map((p) => p.name);
       // sendMidiNoteOn(names, vel);
       sendLampOn(names);
       prevNoteNames = names;
+
+      // 按各音符时值调度熄灯（colorId=0）
+      ev.pitches.forEach((p) => {
+        const durSec = window.Tone.Time(p.durationStr).toSeconds();
+        const delayMs = Math.max(0, (time - window.Tone.context.currentTime + durSec) * 1000);
+        setTimeout(() => sendLampOff([p.name]), delayMs);
+      });
 
       // 练习模式：发完 Note On 后暂停，等用户弹对所有音符
       if (state.practiceMode && names.length > 0) {
@@ -551,7 +570,10 @@
       try {
         if (state.player && typeof state.player.stop === "function") await state.player.stop();
         stopToneFallback();
-        sendLampOn([]); // Clear any lingering lamps
+        // 熄灭所有可能还亮着的灯（发一帧 count=0 的 SysEx）
+        if (state.midiOutput) {
+          state.midiOutput.send([0xF0, 0x05, 0x30, 0x00, 0x3F, 0x20, 0x00, 0x14, 0x00, 0xF7]);
+        }
         state.osmd.cursor.reset();
         state.osmd.cursor.show();
         setStatus("Stopped.");

@@ -77,6 +77,25 @@
     });
   };
 
+  const sendLampOn = (pitches) => {
+    if (!state.midiOutput) return;
+    midiMsg = [0xF0, 0x05, 0x30, 0x00, 0x3F, 0x20, 0x00, 0x14];
+    midiMsg.push(pitches.length); // Lamp count placeholder
+    pitches.forEach((name) => {
+      const n = noteNameToMidi(name);
+      lampId = n - 48;
+      colorId = n % 12;
+      if (lampId >= 0 && lampId <= 36 && colorId >= 0 && colorId <= 11) 
+      {
+        midiMsg.push(lampId);
+        midiMsg.push(colorId);
+      }
+    });
+    midiMsg.push(0xF7); // End of SysEx message
+    state.midiOutput.send(midiMsg);
+    console.log("Sent MIDI Lamp On : ", midiMsg.map(x => x.toString(16).toUpperCase().padStart(2, '0')));
+  };
+
   const sendMidiNoteOff = (pitches) => {
     if (!state.midiOutput) return;
     pitches.forEach((name) => {
@@ -325,6 +344,7 @@
       const vel = Math.round(currentVolume() * 127);
       const names = ev.pitches.map((p) => p.name);
       sendMidiNoteOn(names, vel);
+      sendLampOn(names);
       prevNoteNames = names;
 
       // 练习模式：发完 Note On 后暂停，等用户弹对所有音符
